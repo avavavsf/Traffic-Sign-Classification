@@ -1,0 +1,2 @@
+model_checkpoint_path: "/users/PAS0947/osu8077/new/udacity/P2-CarND-Traffic-Sign-Classifier-Project/traffic-signs-data/model.ckpt"
+all_model_checkpoint_paths: "/users/PAS0947/osu8077/new/udacity/P2-CarND-Traffic-Sign-Classifier-Project/traffic-signs-data/model.ckpt"

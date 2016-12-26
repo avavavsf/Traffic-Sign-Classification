@@ -1,4 +1,4 @@
-name: CarND-Traffic-Sign-Classifier-Project
+name: udacity
 dependencies:
 - pip >= 9
 - jupyter
