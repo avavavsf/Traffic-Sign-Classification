@@ -76,46 +76,20 @@ def normalize_inputimage(image_data):
     greyscale_max = 255
     return a + ( ( (image_data - greyscale_min)*(b - a) )/( greyscale_max - greyscale_min ) )
 
-def transform_image(img,ang_range,shear_range,trans_range):
+def transform_image(img,ang_range):
     '''
-    This function was borrowed from here original by Vivek Yadav:
-    https://carnd-forums.udacity.com/questions/10322627/project-2-unbalanced-data-generating-additional-data-by-jittering-the-original-image
-    This function transforms images to generate new images.
-    The function takes in following arguments,
     1- Image
-    2- ang_range: Range of angles for rotation
-    3- shear_range: Range of values to apply affine transform to
-    4- trans_range: Range of values to apply translations over. 
-    
-    A Random uniform distribution is used to generate different parameters for transformation
-    
+    2- ang_range: Range of angles for rotation   
     '''
     # Rotation
-
     ang_rot = np.random.uniform(ang_range)-ang_range/2
     rows,cols,ch = img.shape    
     Rot_M = cv2.getRotationMatrix2D((cols/2,rows/2),ang_rot,1)
-
-    # Translation
-    tr_x = trans_range*np.random.uniform()-trans_range/2
-    tr_y = trans_range*np.random.uniform()-trans_range/2
-    Trans_M = np.float32([[1,0,tr_x],[0,1,tr_y]])
-
-    # Shear
-    pts1 = np.float32([[5,5],[20,5],[5,20]])
-
-    pt1 = 5+shear_range*np.random.uniform()-shear_range/2
-    pt2 = 20+shear_range*np.random.uniform()-shear_range/2
-
-    pts2 = np.float32([[pt1,5],[pt2,pt1],[5,pt2]])
-
-    shear_M = cv2.getAffineTransform(pts1,pts2)
         
     img = cv2.warpAffine(img,Rot_M,(cols,rows))
-    img = cv2.warpAffine(img,Trans_M,(cols,rows))
-    img = cv2.warpAffine(img,shear_M,(cols,rows))
-    
+
     return img
+
 
 #generate new training data to make the data balance
 inputs_per_class = np.bincount(y_train)
@@ -129,7 +103,7 @@ for i in range(len(inputs_per_class)):
     features = X_train[mask]
     for j in range(add_number):
         index = random.randint(0, inputs_per_class[i] - 1)
-        new_features.append(transform_image(features[index],20, 10, 5))
+        new_features.append(transform_image(features[index],20))
         new_labels.append(i)
     X_train = np.append(X_train, new_features, axis=0)
     y_train = np.append(y_train, new_labels, axis=0)
@@ -156,13 +130,13 @@ print('preprocess done')
 
 
 # Parameters
-learning_rate = 0.01
+learning_rate = 0.1
 batch_size = 128
-training_epochs = 200
+training_epochs = 40
 #number of classes in the German traffic sign datasets
-n_classes = 43  
+n_classes = 43 
 
-def LeNet(x):    
+def Traffic_LeNet(x,keep_prob):    
     # Hyperparameters
     mu = 0
     sigma = 0.1
@@ -186,6 +160,9 @@ def LeNet(x):
     # SOLUTION: Activation.
     conv2 = tf.nn.relu(conv2)
 
+    #drop out
+    conv2 = tf.nn.dropout(conv2, keep_prob)
+
     # SOLUTION: Pooling. Input = 10x10x16. Output = 5x5x16.
     conv2 = tf.nn.max_pool(conv2, ksize=[1, 2, 2, 1], strides=[1, 2, 2, 1], padding='VALID')
 
@@ -200,33 +177,25 @@ def LeNet(x):
     # SOLUTION: Activation.
     fc1    = tf.nn.relu(fc1)
 
-    # SOLUTION: Layer 4: Fully Connected. Input = 120. Output = 84.
-    fc2_W  = tf.Variable(tf.truncated_normal(shape=(120, 84), mean = mu, stddev = sigma))
-    fc2_b  = tf.Variable(tf.zeros(84))
-    fc2    = tf.matmul(fc1, fc2_W) + fc2_b
-    
-    # SOLUTION: Activation.
-    fc2    = tf.nn.relu(fc2)
-
     # SOLUTION: Layer 5: Fully Connected. Input = 84. Output = 43.
-    fc3_W  = tf.Variable(tf.truncated_normal(shape=(84, 43), mean = mu, stddev = sigma))
-    fc3_b  = tf.Variable(tf.zeros(43))
-    logits = tf.matmul(fc2, fc3_W) + fc3_b
+    fc2_W  = tf.Variable(tf.truncated_normal(shape=(120, 43), mean = mu, stddev = sigma))
+    fc2_b  = tf.Variable(tf.zeros(43))
+    logits = tf.matmul(fc1, fc2_W) + fc2_b
     
     return logits
 
-
 #Prepare to train the model
 # tf Graph input
+keep_prob = tf.placeholder(tf.float32)
 x = tf.placeholder("float32", [None, 32, 32, 3])
 y = tf.placeholder("float32", [None, n_classes])
 
-logits = LeNet(x)
+logits = Traffic_LeNet(x,keep_prob)
 
 # Define loss and optimizer
 cost = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits, y))
-optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate).minimize(cost)
-#optimizer = tf.train.AdamOptimizer().minimize(cost)
+#optimizer = tf.train.GradientDescentOptimizer(learning_rate=learning_rate).minimize(cost)
+optimizer = tf.train.AdamOptimizer().minimize(cost)
 
 
 # Initializing the variable
@@ -248,11 +217,11 @@ with tf.Session() as sess:
             batch_x, batch_y = train_features[indices], train_labels[indices]
             
             # Run optimization op (backprop) and cost op (to get loss value)
-            sess.run(optimizer, feed_dict={x: batch_x, y: batch_y})
+            sess.run(optimizer, feed_dict={x: batch_x, y: batch_y, keep_prob: 0.5})
             
         # Display logs per epoch step
-        c = sess.run(cost, feed_dict={x: batch_x, y: batch_y})
-        print("Epoch:", '%04d' % (epoch+1), "cost=", "{:.9f}".format(c))
+        c = sess.run(cost, feed_dict={x: batch_x, y: batch_y, keep_prob: 1.0})
+        print("Epoch:", '%04d' % (epoch+1), "validation cost=", "{:.9f}".format(c))
     print("Optimization Finished!")
     save_path = saver.save(sess, "/users/PAS0947/osu8077/new/udacity/P2-CarND-Traffic-Sign-Classifier-Project/model/model.ckpt")
     print("Model saved in file: %s" % save_path)
@@ -262,8 +231,8 @@ with tf.Session() as sess:
     # Calculate accuracy
     accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float32"))
     print(
-        "Accuracy:",
-        accuracy.eval({x: validation_features, y: validation_labels}))
+        "validation Accuracy:",
+        accuracy.eval({x: validation_features, y: validation_labels, keep_prob: 1.0}))
 
 
 
@@ -280,7 +249,7 @@ correct_prediction = tf.equal(tf.argmax(logits, 1), tf.argmax(y, 1))
 accuracy = tf.reduce_mean(tf.cast(correct_prediction, "float32"))
 print(
     "Accuracy:",
-    sess.run(accuracy, feed_dict={x: validation_features, y: validation_labels}))
+    sess.run(accuracy, feed_dict={x: validation_features, y: validation_labels, keep_prob: 1.0}))
 
 
 
